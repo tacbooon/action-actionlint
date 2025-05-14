@@ -30,3 +30,6 @@ runs:
         INPUT_PATH: ${{ inputs.path }}
       shell: bash
       run: ./actionlint.sh "$INPUT_PATH"
+    - name: OK
+      shell: bash
+      run: echo "OK"
