@@ -1,0 +1,77 @@
+name: actionlint
+description: Check workflow files with actionlint
+author: tacbooon
+inputs:
+  version:
+    description: \"latest\" or actionlint version like \"1.7.7\"
+    required: false
+    default: latest
+outputs:
+  version:
+    description: Resolved actionlint version like \"1.7.7\"
+    value: ${{ steps.actionlint_version.outputs.actionlintVersion }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare action
+      id: prepare
+      env:
+        ACTION_REPO: ${{ github.action_repository }}
+      shell: bash
+      run: |
+        TMP_DIR="${RUNNER_TEMP}/${ACTION_REPO}"
+        ACTIONLINT_DOWNLOADER_DIR="${TMP_DIR}"
+        ACTIONLINT_DOWNLOADER_PATH="${ACTIONLINT_DOWNLOADER_DIR}/download-actionlint.bash"
+        ACTIONLINT_DIR="${TMP_DIR}/bin"
+        ACTIONLINT_PATH="${ACTIONLINT_DIR}/actionlint"
+        mkdir -p "${ACTIONLINT_DOWNLOADER_DIR}"
+        mkdir -p "${ACTIONLINT_DIR}"
+        {
+          echo "tmpDir=${TMP_DIR}"
+          echo "actionlintDownloaderPath=${ACTIONLINT_DOWNLOADER_PATH}"
+          echo "actionlintDir=${ACTIONLINT_DIR}"
+          echo "actionlintPath=${ACTIONLINT_PATH}"
+        } >> "${GITHUB_OUTPUT}"
+    - name: Resolve actionlint version
+      id: actionlint_version
+      shell: bash
+      env:
+        ACTIONLINT_LATEST_VERSION: 1.7.7
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        echo "Input actionlint version: v${INPUT_VERSION}"
+        if [[ "${INPUT_VERSION}" == "latest" ]]; then
+          ACTIONLINT_VERSION="${ACTIONLINT_LATEST_VERSION}"
+        elif [[ "${INPUT_VERSION}" =~ ^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$ ]]; then
+          ACTIONLINT_VERSION="${INPUT_VERSION}"
+        else
+          echo "::error::Invalid version \"${INPUT_VERSION}\". Please use \"latest\" or a semantic version like \"1.7.7\"."
+          exit 1
+        fi
+        echo "Resolved actionlint version: v${ACTIONLINT_VERSION}"
+        echo "actionlintVersion=${ACTIONLINT_VERSION}" >> "${GITHUB_OUTPUT}"
+    - name: Restore actionlint from cache
+      id: cache_actionlint
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+      with:
+        key: ${{ runner.os }}-${{ runner.arch }}-tacbooon-action-actionlint-${{ steps.actionlint_version.outputs.actionlintVersion }}
+        path: ${{ steps.prepare.outputs.actionlintDir }}
+    - name: Download actionlint
+      id: actionlint_download
+      if: steps.cache_actionlint.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        ACTIONLINT_DOWNLOADER_PATH: ${{ steps.prepare.outputs.actionlintDownloaderPath }}
+        ACTIONLINT_DOWNLOADER_REV: 2ab3a12c7848f6c15faca9a92612ef4261d0e370
+        ACTIONLINT_DIR: ${{ steps.prepare.outputs.actionlintDir }}
+        ACTIONLINT_VERSION: ${{ steps.actionlint_version.outputs.actionlintVersion }}
+      run: |
+        ACTIONLINT_DOWNLOAD_URL="https://raw.githubusercontent.com/rhysd/actionlint/${ACTIONLINT_DOWNLOADER_REV}/scripts/download-actionlint.bash"
+        curl -fLsS --retry 1 --retry-all-errors -o "${ACTIONLINT_DOWNLOADER_PATH}" "${ACTIONLINT_DOWNLOAD_URL}"
+        bash "${ACTIONLINT_DOWNLOADER_PATH}" "${ACTIONLINT_VERSION}" "${ACTIONLINT_DIR}"
+    - name: Check workflow files
+      shell: bash
+      env:
+        ACTIONLINT_PATH: ${{ steps.prepare.outputs.actionlintPath }}
+      run: |
+        "${ACTIONLINT_PATH}" --color --verbose
