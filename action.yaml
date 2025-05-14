@@ -1,0 +1,32 @@
+name: actionlint
+description: Check workflow files with actionlint
+author: tacbooon
+inputs:
+  path:
+    description: A list of files to check
+    required: false
+    default:
+  version:
+    description: \"latest\" or actionlint version like \"1.7.7\"
+    required: false
+    default: latest
+outputs:
+  cache-hit:
+    description: Whether the cache was hit
+    value: ${{ steps.setup_actionlint.outputs.cache-hit }}
+  version:
+    description: Installed actionlint version like \"1.7.7\"
+    value: ${{ steps.setup_actionlint.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - name: Setup actionlint
+      id: setup_actionlint
+      uses: tacbooon/setup-actionlint@22f8ee635e095af09999ff6d33de6ed3762e8077
+      with:
+        version: ${{ inputs.version }}
+    - name: Check workflow files with actionlint
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+      shell: bash
+      run: ./actionlint.sh "$INPUT_PATH"
